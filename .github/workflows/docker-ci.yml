@@ -17,3 +17,6 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t cloud-monitoring-lab .
+
+      - name: Run Docker container (test)
+        run: docker run -d -p 8080:80 cloud-monitoring-lab
