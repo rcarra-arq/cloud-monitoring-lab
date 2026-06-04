@@ -1,5 +1,5 @@
 #Cloud Monitoring DevOps Lab
-Personal project created to learn Git, Docker, GitHub Actions and AWS CloudWatch.
+Personal project created to learn Git, Docker, GitHub Actions.
 
 ---
 EN/ENGLISH -  Project Description
