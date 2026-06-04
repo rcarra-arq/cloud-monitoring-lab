@@ -29,6 +29,15 @@ http://localhost:8080
 Architecture
 Developer → GitHub → GitHub Actions → Docker Build → Container Run Test
 
+### Screenshots
+### CI/CD Pipeline (GitHub Actions)
+![CI/CD Pipeline](./screenshots/ci-cd-pipeline.png)
+
+### Repository Overview
+![Repository](./screenshots/repo-overview.png)
+
+### Application Running (Docker)
+![App Running](./screenshots/app-running.png)
 
 ---
 PT/BR - PORTUGUÊS/BR - Descrição do Projeto
@@ -61,5 +70,16 @@ http://localhost:8080
 
 Arquitetura
 Developer → GitHub → GitHub Actions → Docker Build → Container Run Test
+
+
+Screenshots
+### Pipeline CI/CD (GitHub Actions)
+![Pipeline CI/CD](./screenshots/ci-cd-pipeline.png)
+
+### Visão do Repositório
+![Repositório](./screenshots/repo-overview.png)
+
+### Aplicação Rodando (Docker)
+![App Rodando](./screenshots/app-running.png)
 ______________________________________________________________________________________________________________________________
 
