@@ -10,11 +10,11 @@ EN/ENGLISH -  Project Description
 This is a DevOps learning project that simulates a CI/CD pipeline using Docker and GitHub Actions. 
 It demonstrates basic concepts of infrastructure automation and containerization, commonly used in Cloud and DevOps environments.
 
-Technologies Used
-Docker
-GitHub Actions (CI/CD)
-Git & GitHub
-Linux (VM environment)
+*Technologies Used
+* [x] Docker
+* [x] GitHub Actions (CI/CD)
+* [x] Git & GitHub
+* [x] Linux (VM environment)
 
 What the project does
 Automatically builds a Docker image on every push to the repository
