@@ -9,6 +9,7 @@ EN/ENGLISH -  Project Description
 
 This is a DevOps learning project that simulates a CI/CD pipeline using Docker and GitHub Actions. 
 It demonstrates basic concepts of infrastructure automation and containerization, commonly used in Cloud and DevOps environments.
+
 ---
 
 Technologies Used
