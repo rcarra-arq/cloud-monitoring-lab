@@ -31,6 +31,30 @@ http://localhost:8080
 Architecture
 Developer → GitHub → GitHub Actions → Docker Build → Container Run Test
 
+---
+
+## Cost-Conscious Design
+
+This lab is intentionally a **zero-cloud-cost project**:
+
+- Everything runs locally (Docker) or on **GitHub Actions, which is free for
+  public repositories** — no AWS resources are created, so there is nothing
+  to forget running.
+- The image is pinned to `nginx:1.27-alpine` (~8 MB) instead of the default
+  `nginx` image (~190 MB): faster pulls, faster CI runs, smaller attack
+  surface, and no surprise upgrades from a moving `latest` tag.
+- The CI smoke test actually verifies the container answers HTTP 200 — a
+  pipeline that fails fast wastes fewer CI minutes than one that "passes"
+  with a broken app.
+
+For the real cloud cost story — resource tagging, AWS Budget alerts and a
+per-resource cost estimate — see my
+[aws-highly-available-webapp-terraform](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform)
+project, where infrastructure that costs money is created and destroyed by
+design.
+
+---
+
 ### Screenshots
 ### CI/CD Pipeline (GitHub Actions)
 ![CI/CD Pipeline](./screenshots/ci-cd-pipeline.png)
@@ -73,6 +97,19 @@ http://localhost:8080
 Arquitetura
 Developer → GitHub → GitHub Actions → Docker Build → Container Run Test
 
+---
+
+Custo consciente por design
+
+Este lab é intencionalmente um projeto de custo zero de nuvem: tudo roda
+localmente (Docker) ou no GitHub Actions (gratuito para repositórios
+públicos). A imagem é pinada em nginx:1.27-alpine (~8 MB contra ~190 MB da
+imagem padrão) — builds mais rápidos e menos minutos de CI — e o smoke test
+do pipeline verifica de verdade se o container responde HTTP 200. Para a
+parte de custos em nuvem real (tagging, budget alert e estimativa por
+recurso), veja o projeto aws-highly-available-webapp-terraform.
+
+---
 
 Screenshots
 ### Pipeline CI/CD (GitHub Actions)
