@@ -3,6 +3,7 @@ name: Docker CI Pipeline
 on:
   push:
     branches: [ "main" ]
+  pull_request:
 
 jobs:
   build:
@@ -18,5 +19,14 @@ jobs:
       - name: Build Docker image
         run: docker build -t cloud-monitoring-lab .
 
-      - name: Run Docker container (test)
-        run: docker run -d -p 8080:80 cloud-monitoring-lab
+      # A detached "docker run" alone always succeeds, even if the app
+      # inside is broken - so the smoke test actually requests the page
+      # and fails the pipeline unless nginx answers with HTTP 200.
+      - name: Smoke test (container answers HTTP 200)
+        run: |
+          docker run -d -p 8080:80 --name smoke cloud-monitoring-lab
+          sleep 3
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+          echo "HTTP status: $status"
+          docker stop smoke
+          test "$status" = "200"
