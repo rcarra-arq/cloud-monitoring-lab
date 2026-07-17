@@ -98,6 +98,23 @@ faster pulls, faster CI, smaller attack surface. For the real cloud cost
 story (resource tagging, AWS Budget alerts, per-resource estimates), see
 [aws-highly-available-webapp-terraform](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform).
 
+## Challenges & Troubleshooting
+
+**`ssh -p 2222` kept returning `Connection refused` when connecting to the
+VM this lab runs in.** The setup is a VirtualBox VM with NAT networking and
+host ports forwarded to the guest (2222 → 22 for SSH, plus 8080/9090/3000 for
+the stack). The confusing part was that a host-side port test reported 2222 as
+*open* — yet SSH refused. The catch: with VirtualBox NAT, the host accepts the
+TCP handshake on a forwarded port **regardless of whether anything is
+listening inside the guest**, so "the port answers" proved nothing. Checking
+from inside the VM with `systemctl is-active ssh` revealed the service was
+`inactive` — `openssh-server` was installed but never started. `sudo systemctl
+enable --now ssh` started it (and enabled it on boot), and `ss -tlnp | grep
+:22` confirmed sshd was finally listening. Lesson: `Connection refused` means
+the destination is reachable but nothing is accepting on that port — and a
+NAT port-forward test on the host tells you nothing about whether the guest
+service is actually up.
+
 ## Screenshots
 
 ### CI/CD Pipeline (GitHub Actions)
@@ -152,6 +169,22 @@ Para derrubar tudo: `docker compose down`.
 A cada push/PR: build da imagem → smoke test real (exige HTTP 200) → scan de
 vulnerabilidades com Trivy → teste de ponta a ponta do stack completo
 (aplicação responde, Prometheus coletando `nginx_up == 1`, Grafana saudável).
+
+## Desafios & Troubleshooting
+
+**`ssh -p 2222` retornava `Connection refused` ao conectar na VM onde este lab
+roda.** O ambiente é uma VM VirtualBox com rede NAT e portas do host
+redirecionadas para o guest (2222 → 22 para SSH, além de 8080/9090/3000 para o
+stack). O detalhe enganoso: um teste de porta no host indicava a 2222 como
+*aberta* — mas o SSH recusava. A pegadinha: no NAT do VirtualBox o host aceita
+o handshake TCP na porta redirecionada **independentemente de haver algo
+escutando no guest**, então "a porta responde" não provava nada. Dentro da VM,
+`systemctl is-active ssh` mostrou o serviço `inactive`: o `openssh-server`
+estava instalado mas nunca fora iniciado. `sudo systemctl enable --now ssh`
+subiu o serviço (e o habilitou no boot), e `ss -tlnp | grep :22` confirmou o
+sshd finalmente escutando. Lição: `Connection refused` significa que o destino
+é alcançável mas nada aceita naquela porta — e um teste de port-forward no host
+não diz nada sobre o serviço do guest estar de pé.
 
 ## Custo consciente por design
 
