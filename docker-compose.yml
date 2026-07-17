@@ -1,0 +1,48 @@
+# Full local monitoring stack - zero cloud cost.
+#   docker compose up -d --build
+#   app:        http://localhost:8080
+#   prometheus: http://localhost:9090   (metrics + alert rule)
+#   grafana:    http://localhost:3000   (admin / admin, dashboard pre-loaded)
+services:
+  app:
+    build: .
+    container_name: monitoring-lab-app
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+  # Translates nginx's /stub_status counters into Prometheus metrics
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    container_name: monitoring-lab-exporter
+    command:
+      - "--nginx.scrape-uri=http://app:8081/stub_status"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: monitoring-lab-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+    depends_on:
+      - nginx-exporter
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: monitoring-lab-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped

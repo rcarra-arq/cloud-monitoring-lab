@@ -1,0 +1,14 @@
+groups:
+  - name: availability
+    rules:
+      # Fires when the exporter can no longer reach nginx.
+      # Try it: docker stop monitoring-lab-app and watch
+      # http://localhost:9090/alerts turn red (PENDING -> FIRING).
+      - alert: NginxDown
+        expr: nginx_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "nginx is down"
+          description: "The nginx container stopped answering the exporter's scrape for more than 30 seconds."

@@ -3,6 +3,7 @@ name: Docker CI Pipeline
 on:
   push:
     branches: [ "main" ]
+  pull_request:
 
 jobs:
   build:
@@ -18,5 +19,73 @@ jobs:
       - name: Build Docker image
         run: docker build -t cloud-monitoring-lab .
 
-      - name: Run Docker container (test)
-        run: docker run -d -p 8080:80 cloud-monitoring-lab
+      # A detached "docker run" alone always succeeds, even if the app
+      # inside is broken - so the smoke test actually requests the page
+      # and fails the pipeline unless nginx answers with HTTP 200.
+      - name: Smoke test (container answers HTTP 200)
+        run: |
+          docker run -d -p 8080:80 --name smoke cloud-monitoring-lab
+          sleep 3
+          status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+          echo "HTTP status: $status"
+          docker rm -f smoke
+          test "$status" = "200"
+
+      # Vulnerability scan of the built image. ignore-unfixed: alpine
+      # CVEs without an upstream fix would keep CI permanently red
+      # through no fault of ours.
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: cloud-monitoring-lab
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+  monitoring-stack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      # End-to-end test of the whole observability stack: app up,
+      # Prometheus healthy AND actually scraping nginx metrics,
+      # Grafana healthy with its provisioned datasource.
+      - name: Start the monitoring stack
+        run: docker compose up -d --build
+
+      - name: App answers
+        run: |
+          for i in $(seq 1 15); do
+            curl -fs http://localhost:8080 > /dev/null && break
+            sleep 2
+          done
+          curl -fs http://localhost:8080 > /dev/null
+
+      - name: Prometheus is healthy and scraping nginx
+        run: |
+          for i in $(seq 1 15); do
+            curl -fs http://localhost:9090/-/healthy > /dev/null && break
+            sleep 2
+          done
+          # give it one scrape interval, then require the nginx_up
+          # metric to exist with value 1
+          sleep 20
+          result=$(curl -fs 'http://localhost:9090/api/v1/query?query=nginx_up')
+          echo "$result"
+          echo "$result" | grep -q '"nginx_up"'
+          echo "$result" | grep -q '"1"'
+
+      - name: Grafana is healthy
+        run: |
+          for i in $(seq 1 30); do
+            curl -fs http://localhost:3000/api/health > /dev/null && break
+            sleep 2
+          done
+          curl -fs http://localhost:3000/api/health
+
+      - name: Tear down
+        if: always()
+        run: docker compose down
