@@ -97,10 +97,18 @@ Tear down with `docker compose down`.
 
 ## Lab exercises (break things on purpose)
 
-1. **Watch traffic appear** — generate load and watch the Grafana graphs react:
+1. **Watch traffic appear** — generate load at a known rate and watch the
+   Grafana graphs react:
    ```bash
-   while true; do curl -s http://localhost:8080 > /dev/null; done
+   pip install -r requirements.txt
+   python scripts/loadgen.py --rate 20 --duration 60
    ```
+   A `while true; do curl; done` loop works, but it fires as fast as the
+   machine allows — the request rate is whatever your laptop happened to do
+   that day, so the graphs below aren't reproducible. `loadgen.py` takes an
+   explicit `--rate`, survives connection failures instead of dying with them
+   (so it keeps measuring through exercise 2), and prints a summary of the
+   target vs. achieved rate. Run `--help` for all options.
 2. **Kill the app and watch the alert fire** — stop the container, then open
    Prometheus → Alerts and watch `NginxDown` go PENDING → FIRING (~30s).
    Grafana's status panel turns red DOWN:
@@ -184,7 +192,7 @@ The full resilience cycle, captured live while running the lab exercises:
 **1. Healthy baseline — first traffic arriving**
 ![Grafana dashboard healthy, first traffic](./screenshots/Grafana1_up.png)
 
-**2. Load test — the curl loop drives requests towards ~100 req/s**
+**2. Load test — the load generator drives requests towards ~100 req/s**
 ![Load spike on the Requests per second panel](./screenshots/Grafana2_irregular.png)
 
 **3. Failure injected — container stopped: status DOWN, traffic flatlines, the `NginxDown` alert fires in Prometheus**
@@ -267,7 +275,14 @@ Para derrubar tudo: `docker compose down`.
 
 ## Exercícios de laboratório (quebre de propósito)
 
-1. **Gere tráfego** com um loop de `curl` e veja os gráficos do Grafana reagirem.
+1. **Gere tráfego** a uma taxa conhecida e veja os gráficos do Grafana
+   reagirem: `python scripts/loadgen.py --rate 20 --duration 60`
+   (instale antes com `pip install -r requirements.txt`). Um loop
+   `while true; do curl; done` também gera carga, mas dispara o mais rápido
+   que a máquina permitir — a taxa é o que o laptop deu naquele dia, o que
+   torna os gráficos não reprodutíveis. O `loadgen.py` recebe `--rate`
+   explícito, sobrevive a falhas de conexão em vez de morrer junto (segue
+   medindo durante o exercício 2) e imprime um resumo de taxa alvo vs. real.
 2. **Derrube a aplicação** (`docker stop monitoring-lab-app`) e veja o alerta
    `NginxDown` disparar no Prometheus (~30s) e o painel do Grafana ficar
    vermelho.
