@@ -42,6 +42,28 @@ docker compose up -d
 | Grafana | Dashboard (status, requests/s, active connections) provisioned automatically — no manual setup |
 | GitHub Actions | CI: build, smoke test, Trivy scan, and an end-to-end test of the whole stack |
 
+## How it works — the journey of a metric
+
+```
+you / curl ──▶ nginx (app)            serves the page on :8080 and counts
+                 │                    every request internally
+                 │ /stub_status       raw counters, internal port 8081
+                 ▼                    (never published to the host)
+           nginx-exporter             reads the counters and re-exposes them
+                 │                    in Prometheus format on :9113
+                 ▼   scraped every 15s
+            Prometheus                stores the time series and evaluates
+                 │                    alert rules: NginxDown fires after the
+                 │                    app is unreachable for 30s
+                 ▼   PromQL queries
+             Grafana                  draws the dashboard, refreshing every 5s
+```
+
+Two extra safety nets run underneath: Docker's `HEALTHCHECK` (the engine
+itself probes nginx and marks the container unhealthy if it stops answering)
+and the `restart: unless-stopped` policy (a crashed container is brought
+back automatically).
+
 ## Quick start
 
 Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + compose v2).
@@ -57,6 +79,20 @@ docker compose up -d --build
 | http://localhost:3000 | Grafana — login `admin` / `admin`, dashboard "NGINX Overview" already loaded |
 
 Tear down with `docker compose down`.
+
+### Access notes (VMs and older Docker)
+
+- **Older Docker without the compose plugin** (`unknown shorthand flag: 'd'`):
+  use the standalone binary — same commands with a hyphen, `docker-compose up -d --build`.
+- **`permission denied ... docker.sock`**: your user is not in the `docker`
+  group. Either prefix commands with `sudo`, or fix it once with
+  `sudo usermod -aG docker $USER` and log out/in.
+- **Running inside a VirtualBox VM (NAT)**: forward host ports 8080, 9090 and
+  3000 to the guest (Settings → Network → Port Forwarding), then browse from
+  the host at `http://127.0.0.1:3000`. Prefer `127.0.0.1` over `localhost` on
+  Windows: `localhost` resolves to IPv6 `::1` first, and VirtualBox NAT
+  forwarding listens on IPv4 only — so `localhost` refuses while `127.0.0.1`
+  works.
 
 ## Lab exercises (break things on purpose)
 
@@ -137,6 +173,28 @@ que builda, testa e escaneia a imagem — e testa o stack de monitoramento
 inteiro de ponta a ponta a cada mudança. Tudo roda localmente com Docker:
 **custo zero de nuvem**.
 
+## Como funciona — o caminho de uma métrica
+
+```
+você / curl ──▶ nginx (app)           serve a página em :8080 e conta cada
+                  │                   requisição internamente
+                  │ /stub_status      contadores brutos, porta interna 8081
+                  ▼                   (nunca publicada para o host)
+            nginx-exporter            lê os contadores e os re-expõe no
+                  │                   formato Prometheus em :9113
+                  ▼   coletado a cada 15s
+             Prometheus               armazena as séries temporais e avalia
+                  │                   as regras de alerta: NginxDown dispara
+                  │                   após 30s sem resposta da aplicação
+                  ▼   consultas PromQL
+              Grafana                 desenha o dashboard, atualizando a cada 5s
+```
+
+Duas redes de segurança extras por baixo: o `HEALTHCHECK` do Docker (o
+próprio engine sonda o nginx e marca o container como unhealthy se ele parar
+de responder) e a política `restart: unless-stopped` (container que morre
+volta sozinho).
+
 ## Como executar
 
 Requer o [Docker Desktop](https://www.docker.com/products/docker-desktop/).
@@ -152,6 +210,20 @@ docker compose up -d --build
 | http://localhost:3000 | Grafana — login `admin` / `admin`, dashboard "NGINX Overview" já carregado |
 
 Para derrubar tudo: `docker compose down`.
+
+### Notas de acesso (VMs e Docker antigo)
+
+- **Docker antigo sem o plugin compose** (`unknown shorthand flag: 'd'`): use
+  o binário clássico — mesmos comandos com hífen, `docker-compose up -d --build`.
+- **`permission denied ... docker.sock`**: seu usuário não está no grupo
+  `docker`. Use `sudo` na frente dos comandos, ou resolva de vez com
+  `sudo usermod -aG docker $USER` e faça logout/login.
+- **Rodando numa VM VirtualBox (NAT)**: redirecione as portas 8080, 9090 e
+  3000 do host para o guest (Configurações → Rede → Redirecionamento de
+  Portas) e acesse do host em `http://127.0.0.1:3000`. Prefira `127.0.0.1` a
+  `localhost` no Windows: `localhost` resolve primeiro para o IPv6 `::1`, e o
+  NAT do VirtualBox só escuta em IPv4 — então `localhost` recusa enquanto
+  `127.0.0.1` funciona.
 
 ## Exercícios de laboratório (quebre de propósito)
 

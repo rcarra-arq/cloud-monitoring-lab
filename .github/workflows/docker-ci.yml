@@ -35,7 +35,7 @@ jobs:
       # CVEs without an upstream fix would keep CI permanently red
       # through no fault of ours.
       - name: Scan image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: cloud-monitoring-lab
           format: table
