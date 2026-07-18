@@ -4,6 +4,7 @@
 ![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI-2088FF)
 
+
 # Cloud Monitoring DevOps Lab
 
 A hands-on observability lab: a containerized web app monitored by a full
