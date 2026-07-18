@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v5
 
       - name: Set up Docker
-        uses: docker/setup-buildx-action@v3.10.0
+        uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
         run: docker build -t cloud-monitoring-lab .
@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v5
 
       # End-to-end test of the whole observability stack: app up,
       # Prometheus healthy AND actually scraping nginx metrics,
