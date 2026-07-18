@@ -27,7 +27,7 @@ Developer ──push──▶ GitHub ──▶ GitHub Actions
                                └─ full-stack test (compose up + health checks)
 
 docker compose up -d
-   ├── app             nginx:1.27-alpine + HEALTHCHECK      → :8080
+   ├── app             nginx:1.31-alpine + HEALTHCHECK      → :8080
    ├── nginx-exporter  reads nginx /stub_status             (internal)
    ├── prometheus      scrapes metrics + NginxDown alert    → :9090
    └── grafana         pre-provisioned NGINX dashboard      → :3000
@@ -130,7 +130,7 @@ Every push and pull request:
 
 This lab is intentionally a **zero-cloud-cost project**: everything runs
 locally or on GitHub Actions (free for public repositories). The image is
-pinned to `nginx:1.27-alpine` (~8 MB vs ~190 MB for the default image) —
+pinned to `nginx:1.31-alpine` (~8 MB vs ~190 MB for the default image) —
 faster pulls, faster CI, smaller attack surface. For the real cloud cost
 story (resource tagging, AWS Budget alerts, per-resource estimates), see
 [aws-highly-available-webapp-terraform](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform).
@@ -262,7 +262,7 @@ não diz nada sobre o serviço do guest estar de pé.
 ## Custo consciente por design
 
 Projeto de custo zero de nuvem: tudo local ou no GitHub Actions (gratuito
-para repositórios públicos). Imagem pinada em `nginx:1.27-alpine` (~8 MB
+para repositórios públicos). Imagem pinada em `nginx:1.31-alpine` (~8 MB
 contra ~190 MB da padrão). Para controles de custo em nuvem real (tagging,
 budget alert, estimativas), veja o
 [aws-highly-available-webapp-terraform](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform).
