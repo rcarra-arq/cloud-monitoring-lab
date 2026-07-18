@@ -151,7 +151,21 @@ the destination is reachable but nothing is accepting on that port — and a
 NAT port-forward test on the host tells you nothing about whether the guest
 service is actually up.
 
-## Screenshots
+## Screenshots — the lab in action
+
+The full resilience cycle, captured live while running the lab exercises:
+
+**1. Healthy baseline — first traffic arriving**
+![Grafana dashboard healthy, first traffic](./screenshots/Grafana1_up.png)
+
+**2. Load test — the curl loop drives requests towards ~100 req/s**
+![Load spike on the Requests per second panel](./screenshots/Grafana2_irregular.png)
+
+**3. Failure injected — container stopped: status DOWN, traffic flatlines, the `NginxDown` alert fires in Prometheus**
+![Status DOWN with traffic at zero](./screenshots/Grafana3_down.png)
+
+**4. Recovery — container restarted; note the outage window still visible in the status panel's history**
+![Recovered, outage window visible](./screenshots/Grafana4_upAgain.png)
 
 ### CI/CD Pipeline (GitHub Actions)
 ![CI/CD Pipeline](./screenshots/ci-cd-pipeline.png)
