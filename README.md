@@ -152,6 +152,31 @@ the destination is reachable but nothing is accepting on that port — and a
 NAT port-forward test on the host tells you nothing about whether the guest
 service is actually up.
 
+**The CI failed the same pull request twice — for two different reasons.**
+The first failure was `Unable to resolve action aquasecurity/trivy-action@0.24.0`:
+GitHub resolves actions by git tag, and this action's tags are `v`-prefixed
+(`v0.36.0`, `v0.35.0`...), so `@0.24.0` pointed at a ref that literally does
+not exist. Instead of guessing another number, the fix came from checking the
+action's real tag list via the GitHub API and pinning `@v0.36.0`. The second
+failure came right after the merge — and this time the Trivy step went red
+doing **exactly its job**: the base image had been pinned to `nginx:1.27-alpine`
+a year earlier and had accumulated CRITICAL/HIGH CVEs with fixes available.
+The correct response to a security gate is not to silence it — bumping the pin
+to the freshly rebuilt `nginx:1.31-alpine` turned the pipeline green. Lesson:
+pinned versions give you reproducibility, but they age; a scanner in CI is
+what tells you when.
+
+**Git timing: merge conflicts and a stranded commit.** While the monitoring
+PR was open, another PR touching the same three files was merged first — so
+GitHub flagged conflicts in the Dockerfile, the workflow and the README. Since
+this branch was a superset of the other's changes, the resolution was merging
+`main` into the branch and keeping the branch's version of each file. Then the
+reverse happened: the screenshots commit was pushed to the feature branch
+*minutes after* the PR had already been merged — a merged PR does not follow
+later pushes, so the commit never reached `main` and had to be cherry-picked
+onto a fresh branch. Lesson: a pull request is a snapshot in time; check what
+`main` looks like before and after you press the button.
+
 ## Screenshots — the lab in action
 
 The full resilience cycle, captured live while running the lab exercises:
@@ -272,6 +297,31 @@ subiu o serviço (e o habilitou no boot), e `ss -tlnp | grep :22` confirmou o
 sshd finalmente escutando. Lição: `Connection refused` significa que o destino
 é alcançável mas nada aceita naquela porta — e um teste de port-forward no host
 não diz nada sobre o serviço do guest estar de pé.
+
+**O CI reprovou o mesmo pull request duas vezes — por motivos diferentes.**
+A primeira falha foi `Unable to resolve action aquasecurity/trivy-action@0.24.0`:
+o GitHub resolve actions por tag do git, e as tags desse action têm prefixo
+`v` (`v0.36.0`, `v0.35.0`...), então `@0.24.0` apontava para uma referência
+que simplesmente não existe. Em vez de chutar outro número, a correção veio de
+consultar a lista real de tags pela API do GitHub e pinar `@v0.36.0`. A
+segunda falha veio logo após o merge — e dessa vez o passo do Trivy ficou
+vermelho fazendo **exatamente o trabalho dele**: a imagem base estava pinada
+em `nginx:1.27-alpine` havia um ano e tinha acumulado CVEs CRITICAL/HIGH com
+correção disponível. A resposta certa para um gate de segurança não é
+silenciá-lo — atualizar o pin para a `nginx:1.31-alpine` recém-reconstruída
+deixou o pipeline verde. Lição: versão pinada dá reprodutibilidade, mas
+envelhece; o scanner no CI é quem avisa a hora.
+
+**Timing de git: conflitos de merge e um commit órfão.** Com o PR do
+monitoramento aberto, outro PR que mexia nos mesmos três arquivos foi mergeado
+antes — e o GitHub acusou conflitos no Dockerfile, no workflow e no README.
+Como este branch era um superconjunto das mudanças do outro, a resolução foi
+mergear a `main` para dentro do branch mantendo a versão do branch em cada
+arquivo. Depois aconteceu o inverso: o commit dos screenshots foi enviado ao
+branch *minutos depois* de o PR já ter sido mergeado — PR mergeado não
+acompanha pushes posteriores, então o commit nunca chegou à `main` e precisou
+de cherry-pick num branch novo. Lição: um pull request é uma fotografia no
+tempo; confira como a `main` está antes e depois de apertar o botão.
 
 ## Custo consciente por design
 
