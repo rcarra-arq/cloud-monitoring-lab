@@ -13,6 +13,15 @@ and security-scans the image — and tests the entire monitoring stack
 end-to-end on every change. Everything runs locally with Docker:
 **zero cloud cost**.
 
+> **Portfolio focus / Foco deste projeto:** a **Reliability Engineering** case
+> study — detect failure, alert, and self-heal — with a set of **documented,
+> real-world troubleshooting write-ups**.
+> → [Reliability Engineering: Troubleshooting Case Studies](#reliability-engineering-troubleshooting-case-studies)
+>
+> *Estudo prático de **Engenharia de Confiabilidade** (detectar falha, alertar
+> e auto-recuperar), com documentações técnicas de cenários de troubleshooting
+> reais.*
+
 *Versão em português abaixo.* 🇧🇷
 
 ---
@@ -143,7 +152,11 @@ faster pulls, faster CI, smaller attack surface. For the real cloud cost
 story (resource tagging, AWS Budget alerts, per-resource estimates), see
 [aws-highly-available-webapp-terraform](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform).
 
-## Challenges & Troubleshooting
+## Reliability Engineering: Troubleshooting Case Studies
+
+Detailed write-ups of real problems hit while building and running this lab —
+each one ends with the root cause and the lesson, the way an incident postmortem
+would.
 
 **`ssh -p 2222` kept returning `Connection refused` when connecting to the
 VM this lab runs in.** The setup is a VirtualBox VM with NAT networking and
@@ -297,7 +310,11 @@ A cada push/PR: build da imagem → smoke test real (exige HTTP 200) → scan de
 vulnerabilidades com Trivy → teste de ponta a ponta do stack completo
 (aplicação responde, Prometheus coletando `nginx_up == 1`, Grafana saudável).
 
-## Desafios & Troubleshooting
+## Engenharia de Confiabilidade: Casos de Troubleshooting
+
+Relatos detalhados de problemas reais enfrentados ao construir e rodar este
+lab — cada um termina com a causa raiz e a lição, no estilo de um postmortem de
+incidente.
 
 **`ssh -p 2222` retornava `Connection refused` ao conectar na VM onde este lab
 roda.** O ambiente é uma VM VirtualBox com rede NAT e portas do host
