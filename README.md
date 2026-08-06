@@ -7,6 +7,8 @@
 
 # Cloud Monitoring DevOps Lab
 
+**🇺🇸 English** · [🇧🇷 Português](#português)
+
 A hands-on observability lab: a containerized web app monitored by a full
 **Prometheus + Grafana** stack, with a CI pipeline that builds, smoke-tests
 and security-scans the image — and tests the entire monitoring stack
@@ -21,8 +23,6 @@ end-to-end on every change. Everything runs locally with Docker:
 > *Estudo prático de **Engenharia de Confiabilidade** (detectar falha, alertar
 > e auto-recuperar), com documentações técnicas de cenários de troubleshooting
 > reais.*
-
-*Versão em português abaixo.* 🇧🇷
 
 ---
 
@@ -226,7 +226,9 @@ The full resilience cycle, captured live while running the lab exercises:
 ---
 ---
 
-# 🇧🇷 Cloud Monitoring DevOps Lab (Português)
+## Português
+
+[🇺🇸 English ⬆](#cloud-monitoring-devops-lab)
 
 Laboratório prático de observabilidade: uma aplicação containerizada
 monitorada por um stack completo **Prometheus + Grafana**, com pipeline de CI
