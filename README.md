@@ -26,6 +26,14 @@ end-to-end on every change. Everything runs locally with Docker:
 
 ---
 
+## My reasons
+
+I didn't know how monitoring worked and wanted to understand it better — how to
+set it up and how the pieces fit together. It was also a way to get a feel for
+the day-to-day of a DevOps / Infrastructure role: what needs to be watched and
+what comes up to be fixed. After all, once you have infrastructure running, you
+need to be able to see what's happening with it — and that's why I built this lab.
+
 ## Architecture
 
 ```
@@ -235,6 +243,15 @@ monitorada por um stack completo **Prometheus + Grafana**, com pipeline de CI
 que builda, testa e escaneia a imagem — e testa o stack de monitoramento
 inteiro de ponta a ponta a cada mudança. Tudo roda localmente com Docker:
 **custo zero de nuvem**.
+
+## O porquê
+
+Eu não sabia como o monitoramento funcionava e queria entender melhor — como
+configurar e como as peças se encaixam. Era também uma forma de sentir como é o
+dia a dia de DevOps / Analista de Infra: o que precisa ser olhado e o que
+aparece pra resolver. Afinal, depois que você tem uma infraestrutura no ar,
+precisa conseguir enxergar o que está acontecendo com ela — e foi por isso que
+montei este lab.
 
 ## Como funciona — o caminho de uma métrica
 
