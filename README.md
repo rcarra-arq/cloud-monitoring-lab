@@ -166,45 +166,44 @@ Detailed write-ups of real problems hit while building and running this lab —
 each one ends with the root cause and the lesson, the way an incident postmortem
 would.
 
-**`ssh -p 2222` kept returning `Connection refused` when connecting to the
-VM this lab runs in.** The setup is a VirtualBox VM with NAT networking and
-host ports forwarded to the guest (2222 → 22 for SSH, plus 8080/9090/3000 for
-the stack). The confusing part was that a host-side port test reported 2222 as
-*open* — yet SSH refused. The catch: with VirtualBox NAT, the host accepts the
-TCP handshake on a forwarded port **regardless of whether anything is
-listening inside the guest**, so "the port answers" proved nothing. Checking
-from inside the VM with `systemctl is-active ssh` revealed the service was
-`inactive` — `openssh-server` was installed but never started. `sudo systemctl
-enable --now ssh` started it (and enabled it on boot), and `ss -tlnp | grep
-:22` confirmed sshd was finally listening. Lesson: `Connection refused` means
-the destination is reachable but nothing is accepting on that port — and a
-NAT port-forward test on the host tells you nothing about whether the guest
-service is actually up.
+**SSH kept refusing the connection — even though the port looked open.** I was
+trying to connect to the VirtualBox VM over SSH (host port 2222 forwarded to 22
+inside the VM). A quick port test on my machine said 2222 was open, which left
+me confused: if the port is open, why does SSH keep saying `Connection refused`?
+What I learned: with VirtualBox NAT, my host answers the forwarded port even
+when nothing inside the VM is actually listening — so "the port is open" meant
+nothing. Inside the VM, `systemctl is-active ssh` showed the service was
+`inactive`: SSH was installed but had never been started. `sudo systemctl
+enable --now ssh` started it (and set it to run on boot), and I connected on the
+first try. What I took from this: `Connection refused` means the machine is
+reachable but nothing is listening on that port — and a port test from outside a
+NAT can fool you.
 
-**The CI failed the same pull request twice — for two different reasons.**
-The first failure was `Unable to resolve action aquasecurity/trivy-action@0.24.0`:
-GitHub resolves actions by git tag, and this action's tags are `v`-prefixed
-(`v0.36.0`, `v0.35.0`...), so `@0.24.0` pointed at a ref that literally does
-not exist. Instead of guessing another number, the fix came from checking the
-action's real tag list via the GitHub API and pinning `@v0.36.0`. The second
-failure came right after the merge — and this time the Trivy step went red
-doing **exactly its job**: the base image had been pinned to `nginx:1.27-alpine`
-a year earlier and had accumulated CRITICAL/HIGH CVEs with fixes available.
-The correct response to a security gate is not to silence it — bumping the pin
-to the freshly rebuilt `nginx:1.31-alpine` turned the pipeline green. Lesson:
-pinned versions give you reproducibility, but they age; a scanner in CI is
-what tells you when.
+**My CI failed the same pull request twice — for two different reasons.** The
+first error was `Unable to resolve action aquasecurity/trivy-action@0.24.0`. It
+turned out GitHub finds actions by their git tag, and this one's tags start with
+a `v` (`v0.36.0`, `v0.35.0`...), so `@0.24.0` pointed at something that simply
+didn't exist. Instead of guessing another number, I checked the action's real
+tags and pinned `@v0.36.0`. The second failure came right after merging — and
+this time Trivy went red doing exactly its job: the base image was pinned to
+`nginx:1.27-alpine` from a year before, and it had picked up known CRITICAL/HIGH
+vulnerabilities that already had fixes. I learned the right move isn't to
+silence a security check — I bumped the image to the newer `nginx:1.31-alpine`
+and the pipeline went green. What I took from this: pinning a version keeps
+things reproducible, but versions age — the scanner in CI is what tells you when
+it's time to update.
 
-**Git timing: merge conflicts and a stranded commit.** While the monitoring
-PR was open, another PR touching the same three files was merged first — so
-GitHub flagged conflicts in the Dockerfile, the workflow and the README. Since
-this branch was a superset of the other's changes, the resolution was merging
-`main` into the branch and keeping the branch's version of each file. Then the
-reverse happened: the screenshots commit was pushed to the feature branch
-*minutes after* the PR had already been merged — a merged PR does not follow
-later pushes, so the commit never reached `main` and had to be cherry-picked
-onto a fresh branch. Lesson: a pull request is a snapshot in time; check what
-`main` looks like before and after you press the button.
+**Git timing: merge conflicts and a stranded commit.** I had two of my own
+branches open at once, both touching the same three files. When I merged the
+first PR, the second one suddenly showed conflicts in the Dockerfile, the
+workflow and the README — `main` had moved under it. Since the second branch
+was a superset of the first's changes, the fix was to merge `main` into it and
+keep the branch's version of each file. Then the reverse bit me: I pushed a
+screenshots commit to a branch *minutes after* its own PR had already been
+merged — a merged PR does not follow later pushes, so the commit never reached
+`main` and I had to cherry-pick it onto a fresh branch. Lesson: a pull request
+is a snapshot in time; check what `main` looks like before and after you press
+the button.
 
 ## Screenshots — the lab in action
 
@@ -252,6 +251,32 @@ dia a dia de DevOps / Analista de Infra: o que precisa ser olhado e o que
 aparece pra resolver. Afinal, depois que você tem uma infraestrutura no ar,
 precisa conseguir enxergar o que está acontecendo com ela — e foi por isso que
 montei este lab.
+
+## Arquitetura
+
+```
+Desenvolvedor ──push──▶ GitHub ──▶ GitHub Actions
+                               ├─ build da imagem
+                               ├─ smoke test (HTTP 200)
+                               ├─ scan de vulnerabilidades (Trivy)
+                               └─ teste do stack completo (compose up + health checks)
+
+docker compose up -d
+   ├── app             nginx:1.31-alpine + HEALTHCHECK      → :8080
+   ├── nginx-exporter  lê o /stub_status do nginx           (interno)
+   ├── prometheus      coleta métricas + alerta NginxDown   → :9090
+   └── grafana         dashboard NGINX pré-provisionado     → :3000
+```
+
+## Stack
+
+| Componente | Papel |
+|---|---|
+| nginx (alpine, pinado) | A aplicação web monitorada, com um `HEALTHCHECK` do Docker |
+| nginx-prometheus-exporter | Traduz os contadores do `/stub_status` do nginx em métricas Prometheus |
+| Prometheus | Coleta métricas a cada 15s; dispara o alerta `NginxDown` se o nginx parar de responder |
+| Grafana | Dashboard (status, requisições/s, conexões ativas) provisionado automaticamente — sem configuração manual |
+| GitHub Actions | CI: build, smoke test, scan com Trivy e teste de ponta a ponta do stack inteiro |
 
 ## Como funciona — o caminho de uma métrica
 
@@ -335,44 +360,44 @@ Relatos detalhados de problemas reais enfrentados ao construir e rodar este
 lab — cada um termina com a causa raiz e a lição, no estilo de um postmortem de
 incidente.
 
-**`ssh -p 2222` retornava `Connection refused` ao conectar na VM onde este lab
-roda.** O ambiente é uma VM VirtualBox com rede NAT e portas do host
-redirecionadas para o guest (2222 → 22 para SSH, além de 8080/9090/3000 para o
-stack). O detalhe enganoso: um teste de porta no host indicava a 2222 como
-*aberta* — mas o SSH recusava. A pegadinha: no NAT do VirtualBox o host aceita
-o handshake TCP na porta redirecionada **independentemente de haver algo
-escutando no guest**, então "a porta responde" não provava nada. Dentro da VM,
-`systemctl is-active ssh` mostrou o serviço `inactive`: o `openssh-server`
-estava instalado mas nunca fora iniciado. `sudo systemctl enable --now ssh`
-subiu o serviço (e o habilitou no boot), e `ss -tlnp | grep :22` confirmou o
-sshd finalmente escutando. Lição: `Connection refused` significa que o destino
-é alcançável mas nada aceita naquela porta — e um teste de port-forward no host
-não diz nada sobre o serviço do guest estar de pé.
+**O SSH recusava a conexão — mesmo com a porta parecendo aberta.** Eu tentava
+conectar na VM do VirtualBox por SSH (porta 2222 do host redirecionada para a 22
+dentro da VM). Um teste rápido de porta dizia que a 2222 estava aberta, e eu
+fiquei confusa: se a porta está aberta, por que o SSH insiste em
+`Connection refused`? O que aprendi: no NAT do VirtualBox, o host responde à
+porta redirecionada mesmo quando nada dentro da VM está escutando — então "a
+porta está aberta" não significava nada. Dentro da VM, o `systemctl is-active
+ssh` mostrou o serviço `inactive`: o SSH estava instalado, mas nunca tinha sido
+iniciado. O `sudo systemctl enable --now ssh` subiu ele (e deixou iniciar no
+boot), e conectei de primeira. O que ficou: `Connection refused` quer dizer que
+a máquina é alcançável, mas nada está escutando naquela porta — e um teste de
+porta por fora de um NAT pode te enganar.
 
-**O CI reprovou o mesmo pull request duas vezes — por motivos diferentes.**
-A primeira falha foi `Unable to resolve action aquasecurity/trivy-action@0.24.0`:
-o GitHub resolve actions por tag do git, e as tags desse action têm prefixo
-`v` (`v0.36.0`, `v0.35.0`...), então `@0.24.0` apontava para uma referência
-que simplesmente não existe. Em vez de chutar outro número, a correção veio de
-consultar a lista real de tags pela API do GitHub e pinar `@v0.36.0`. A
-segunda falha veio logo após o merge — e dessa vez o passo do Trivy ficou
-vermelho fazendo **exatamente o trabalho dele**: a imagem base estava pinada
-em `nginx:1.27-alpine` havia um ano e tinha acumulado CVEs CRITICAL/HIGH com
-correção disponível. A resposta certa para um gate de segurança não é
-silenciá-lo — atualizar o pin para a `nginx:1.31-alpine` recém-reconstruída
-deixou o pipeline verde. Lição: versão pinada dá reprodutibilidade, mas
-envelhece; o scanner no CI é quem avisa a hora.
+**Meu CI reprovou o mesmo pull request duas vezes — por motivos diferentes.** O
+primeiro erro foi `Unable to resolve action aquasecurity/trivy-action@0.24.0`.
+Descobri que o GitHub acha os actions pela tag do git, e as desse aqui começam
+com `v` (`v0.36.0`, `v0.35.0`...), então `@0.24.0` apontava para algo que
+simplesmente não existia. Em vez de chutar outro número, olhei as tags reais do
+action e fixei `@v0.36.0`. A segunda falha veio logo depois do merge — e dessa
+vez o Trivy ficou vermelho fazendo exatamente o trabalho dele: a imagem base
+estava fixada em `nginx:1.27-alpine` de um ano antes e tinha acumulado
+vulnerabilidades CRITICAL/HIGH que já tinham correção. Aprendi que o certo não é
+silenciar um gate de segurança — atualizei a imagem para a `nginx:1.31-alpine`
+mais nova e o pipeline ficou verde. O que ficou: fixar uma versão mantém tudo
+reproduzível, mas as versões envelhecem — o scanner no CI é quem avisa a hora de
+atualizar.
 
-**Timing de git: conflitos de merge e um commit órfão.** Com o PR do
-monitoramento aberto, outro PR que mexia nos mesmos três arquivos foi mergeado
-antes — e o GitHub acusou conflitos no Dockerfile, no workflow e no README.
-Como este branch era um superconjunto das mudanças do outro, a resolução foi
-mergear a `main` para dentro do branch mantendo a versão do branch em cada
-arquivo. Depois aconteceu o inverso: o commit dos screenshots foi enviado ao
-branch *minutos depois* de o PR já ter sido mergeado — PR mergeado não
-acompanha pushes posteriores, então o commit nunca chegou à `main` e precisou
-de cherry-pick num branch novo. Lição: um pull request é uma fotografia no
-tempo; confira como a `main` está antes e depois de apertar o botão.
+**Timing de git: conflitos de merge e um commit órfão.** Eu estava com dois
+branches meus abertos ao mesmo tempo, os dois mexendo nos mesmos três arquivos.
+Quando mergeei o primeiro PR, o segundo passou a acusar conflitos no Dockerfile,
+no workflow e no README — a `main` tinha mudado por baixo dele. Como o segundo
+branch era um superconjunto das mudanças do primeiro, a solução foi mergear a
+`main` para dentro dele mantendo a versão do branch em cada arquivo. Depois o
+inverso me pegou: enviei um commit de screenshots a um branch *minutos depois*
+de o PR dele já ter sido mergeado — um PR mergeado não acompanha pushes
+posteriores, então o commit nunca chegou à `main` e precisei fazer cherry-pick
+num branch novo. Lição: um pull request é uma fotografia no tempo; confira como
+a `main` está antes e depois de apertar o botão.
 
 ## Custo consciente por design
 
@@ -381,3 +406,28 @@ para repositórios públicos). Imagem pinada em `nginx:1.31-alpine` (~8 MB
 contra ~190 MB da padrão). Para controles de custo em nuvem real (tagging,
 budget alert, estimativas), veja o
 [aws-highly-available-webapp-terraform](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform).
+
+## Screenshots — o lab em ação
+
+O ciclo completo de resiliência, capturado ao vivo durante os exercícios do lab:
+
+**1. Linha de base saudável — primeiro tráfego chegando**
+![Dashboard do Grafana saudável, primeiro tráfego](./screenshots/Grafana1_up.png)
+
+**2. Teste de carga — o gerador leva as requisições a ~100 req/s**
+![Pico de carga no painel de requisições por segundo](./screenshots/Grafana2_irregular.png)
+
+**3. Falha injetada — container parado: status DOWN, o tráfego zera e o alerta `NginxDown` dispara no Prometheus**
+![Status DOWN com tráfego em zero](./screenshots/Grafana3_down.png)
+
+**4. Recuperação — container reiniciado; repare que a janela de indisponibilidade continua visível no histórico do painel de status**
+![Recuperado, janela de indisponibilidade visível](./screenshots/Grafana4_upAgain.png)
+
+### Pipeline CI/CD (GitHub Actions)
+![Pipeline CI/CD](./screenshots/ci-cd-pipeline.png)
+
+### Visão geral do repositório
+![Repositório](./screenshots/repo-overview.png)
+
+### Aplicação rodando (Docker)
+![Aplicação rodando](./screenshots/app-running.png)
