@@ -112,7 +112,7 @@ Tear down with `docker compose down`.
   forwarding listens on IPv4 only — so `localhost` refuses while `127.0.0.1`
   works.
 
-## Lab exercises (break things on purpose)
+## Testing: breaking things on purpose
 
 1. **Watch traffic appear** — generate load at a known rate and watch the
    Grafana graphs react:
@@ -330,7 +330,7 @@ Para derrubar tudo: `docker compose down`.
   NAT do VirtualBox só escuta em IPv4 — então `localhost` recusa enquanto
   `127.0.0.1` funciona.
 
-## Exercícios de laboratório (quebre de propósito)
+## Testando: quebrando de propósito
 
 1. **Gere tráfego** a uma taxa conhecida e veja os gráficos do Grafana
    reagirem: `python scripts/loadgen.py --rate 20 --duration 60`
