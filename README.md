@@ -4,27 +4,222 @@
 ![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI-2088FF)
 
-
 # Cloud Monitoring DevOps Lab
 
-**🇺🇸 English** · [🇧🇷 Português](#português)
+Laboratório prático de observabilidade: uma aplicação containerizada monitorada
+por um stack completo **Prometheus + Grafana**, com pipeline de CI que builda,
+testa e escaneia a imagem — e testa o stack de monitoramento inteiro de ponta a
+ponta a cada mudança. Tudo roda localmente com Docker: **custo zero de nuvem**.
 
 A hands-on observability lab: a containerized web app monitored by a full
-**Prometheus + Grafana** stack, with a CI pipeline that builds, smoke-tests
-and security-scans the image — and tests the entire monitoring stack
-end-to-end on every change. Everything runs locally with Docker:
-**zero cloud cost**.
+**Prometheus + Grafana** stack, with a CI pipeline that builds, smoke-tests and
+security-scans the image. Everything runs locally with Docker: **zero cloud
+cost**.
 
-> **Portfolio focus / Foco deste projeto:** a **Reliability Engineering** case
-> study — detect failure, alert, and self-heal — with a set of **documented,
-> real-world troubleshooting write-ups**.
-> → [Reliability Engineering: Troubleshooting Case Studies](#reliability-engineering-troubleshooting-case-studies)
->
-> *Estudo prático de **Engenharia de Confiabilidade** (detectar falha, alertar
-> e auto-recuperar), com documentações técnicas de cenários de troubleshooting
-> reais.*
+🇺🇸 [Full version in English ↓](#english)
+
+## Português
+
+> **Foco deste projeto:** um estudo de **Engenharia de Confiabilidade** —
+> detectar falha, alertar e auto-recuperar — com documentações técnicas de
+> cenários de troubleshooting reais.
+> → [Engenharia de Confiabilidade: Casos de Troubleshooting](#engenharia-de-confiabilidade-casos-de-troubleshooting)
+
+## O porquê
+
+Eu não sabia como o monitoramento funcionava e queria entender melhor — como
+configurar e como as peças se encaixam. Era também uma forma de sentir como é o
+dia a dia de DevOps / Analista de Infra: o que precisa ser olhado e o que
+aparece pra resolver. Afinal, depois que você tem uma infraestrutura no ar,
+precisa conseguir enxergar o que está acontecendo com ela — e foi por isso que
+montei este lab.
+
+## Arquitetura
+
+Quando faço `push` no GitHub, o **GitHub Actions** roda:
+- build da imagem
+- smoke test (exige HTTP 200)
+- scan de vulnerabilidades (Trivy)
+- teste do stack completo (`compose up` + health checks)
+
+Localmente, o `docker compose up -d` sobe quatro containers:
+- **app** — nginx:1.31-alpine com `HEALTHCHECK` (porta 8080)
+- **nginx-exporter** — lê o `/stub_status` do nginx (interno)
+- **prometheus** — coleta as métricas e dispara o alerta `NginxDown` (porta 9090)
+- **grafana** — dashboard NGINX pré-provisionado (porta 3000)
+
+## Stack
+
+| Componente | Papel |
+|---|---|
+| nginx (alpine, pinado) | A aplicação web monitorada, com um `HEALTHCHECK` do Docker |
+| nginx-prometheus-exporter | Traduz os contadores do `/stub_status` do nginx em métricas Prometheus |
+| Prometheus | Coleta métricas a cada 15s; dispara o alerta `NginxDown` se o nginx parar de responder |
+| Grafana | Dashboard (status, requisições/s, conexões ativas) provisionado automaticamente — sem configuração manual |
+| GitHub Actions | CI: build, smoke test, scan com Trivy e teste de ponta a ponta do stack inteiro |
+
+## Como funciona — o caminho de uma métrica
+
+O caminho que uma métrica percorre, do request até o gráfico:
+
+1. **nginx (app)** serve a página na porta 8080 e conta cada requisição
+   internamente (contadores brutos no `/stub_status`, porta interna 8081, nunca
+   exposta ao host).
+2. **nginx-exporter** lê esses contadores e os re-expõe no formato Prometheus
+   (porta 9113).
+3. **Prometheus** coleta a cada 15s, guarda as séries temporais e avalia as
+   regras de alerta — o `NginxDown` dispara depois de 30s sem resposta da
+   aplicação.
+4. **Grafana** consulta o Prometheus (PromQL) e desenha o dashboard, atualizando
+   a cada 5s.
+
+Duas redes de segurança extras por baixo: o `HEALTHCHECK` do Docker (o próprio
+engine sonda o nginx e marca o container como unhealthy se ele parar de
+responder) e a política `restart: unless-stopped` (container que morre volta
+sozinho).
+
+## Como executar
+
+Requer o [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+```bash
+docker compose up -d --build
+```
+
+| URL | O que aparece |
+|---|---|
+| http://localhost:8080 | A aplicação |
+| http://localhost:9090 | Prometheus (veja Status → Targets, e Alerts) |
+| http://localhost:3000 | Grafana — login `admin` / `admin`, dashboard "NGINX Overview" já carregado |
+
+Para derrubar tudo: `docker compose down`.
+
+### Notas de acesso (VMs e Docker antigo)
+
+- **Docker antigo sem o plugin compose** (`unknown shorthand flag: 'd'`): use
+  o binário clássico — mesmos comandos com hífen, `docker-compose up -d --build`.
+- **`permission denied ... docker.sock`**: seu usuário não está no grupo
+  `docker`. Use `sudo` na frente dos comandos, ou resolva de vez com
+  `sudo usermod -aG docker $USER` e faça logout/login.
+- **Rodando numa VM VirtualBox (NAT)**: redirecione as portas 8080, 9090 e
+  3000 do host para o guest (Configurações → Rede → Redirecionamento de
+  Portas) e acesse do host em `http://127.0.0.1:3000`. Prefira `127.0.0.1` a
+  `localhost` no Windows: `localhost` resolve primeiro para o IPv6 `::1`, e o
+  NAT do VirtualBox só escuta em IPv4 — então `localhost` recusa enquanto
+  `127.0.0.1` funciona.
+
+## Testando: quebrando de propósito
+
+1. **Gere tráfego** a uma taxa conhecida e veja os gráficos do Grafana
+   reagirem: `python scripts/loadgen.py --rate 20 --duration 60`
+   (instale antes com `pip install -r requirements.txt`). Um loop
+   `while true; do curl; done` também gera carga, mas dispara o mais rápido
+   que a máquina permitir — a taxa é o que o laptop deu naquele dia, o que
+   torna os gráficos não reprodutíveis. O `loadgen.py` recebe `--rate`
+   explícito, sobrevive a falhas de conexão em vez de morrer junto (segue
+   medindo durante o exercício 2) e imprime um resumo de taxa alvo vs. real.
+2. **Derrube a aplicação** (`docker stop monitoring-lab-app`) e veja o alerta
+   `NginxDown` disparar no Prometheus (~30s) e o painel do Grafana ficar
+   vermelho.
+3. **Auto-recuperação** — suba de novo e veja tudo normalizar. A política
+   `restart: unless-stopped` faz aqui o papel que o Auto Scaling Group faz no
+   meu [projeto AWS de alta disponibilidade](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform):
+   detectar falha e restaurar o serviço.
+
+## Pipeline de CI
+
+A cada push/PR: build da imagem → smoke test real (exige HTTP 200) → scan de
+vulnerabilidades com Trivy → teste de ponta a ponta do stack completo
+(aplicação responde, Prometheus coletando `nginx_up == 1`, Grafana saudável).
+
+## Engenharia de Confiabilidade: Casos de Troubleshooting
+
+Relatos detalhados de problemas reais enfrentados ao construir e rodar este
+lab — cada um termina com a causa raiz e a lição, no estilo de um postmortem de
+incidente.
+
+**O SSH recusava a conexão — mesmo com a porta parecendo aberta.** Eu tentava
+conectar na VM do VirtualBox por SSH (porta 2222 do host redirecionada para a 22
+dentro da VM). Um teste rápido de porta dizia que a 2222 estava aberta, e eu
+fiquei confusa: se a porta está aberta, por que o SSH insiste em
+`Connection refused`? O que aprendi: no NAT do VirtualBox, o host responde à
+porta redirecionada mesmo quando nada dentro da VM está escutando — então "a
+porta está aberta" não significava nada. Dentro da VM, o `systemctl is-active
+ssh` mostrou o serviço `inactive`: o SSH estava instalado, mas nunca tinha sido
+iniciado. O `sudo systemctl enable --now ssh` subiu ele (e deixou iniciar no
+boot), e conectei de primeira. O que ficou: `Connection refused` quer dizer que
+a máquina é alcançável, mas nada está escutando naquela porta — e um teste de
+porta por fora de um NAT pode te enganar.
+
+**Meu CI reprovou o mesmo pull request duas vezes — por motivos diferentes.** O
+primeiro erro foi `Unable to resolve action aquasecurity/trivy-action@0.24.0`.
+Descobri que o GitHub acha os actions pela tag do git, e as desse aqui começam
+com `v` (`v0.36.0`, `v0.35.0`...), então `@0.24.0` apontava para algo que
+simplesmente não existia. Em vez de chutar outro número, olhei as tags reais do
+action e fixei `@v0.36.0`. A segunda falha veio logo depois do merge — e dessa
+vez o Trivy ficou vermelho fazendo exatamente o trabalho dele: a imagem base
+estava fixada em `nginx:1.27-alpine` de um ano antes e tinha acumulado
+vulnerabilidades CRITICAL/HIGH que já tinham correção. Aprendi que o certo não é
+silenciar um gate de segurança — atualizei a imagem para a `nginx:1.31-alpine`
+mais nova e o pipeline ficou verde. O que ficou: fixar uma versão mantém tudo
+reproduzível, mas as versões envelhecem — o scanner no CI é quem avisa a hora de
+atualizar.
+
+**Timing de git: conflitos de merge e um commit órfão.** Eu estava com dois
+branches meus abertos ao mesmo tempo, os dois mexendo nos mesmos três arquivos.
+Quando mergeei o primeiro PR, o segundo passou a acusar conflitos no Dockerfile,
+no workflow e no README — a `main` tinha mudado por baixo dele. Como o segundo
+branch era um superconjunto das mudanças do primeiro, a solução foi mergear a
+`main` para dentro dele mantendo a versão do branch em cada arquivo. Depois o
+inverso me pegou: enviei um commit de screenshots a um branch *minutos depois*
+de o PR dele já ter sido mergeado — um PR mergeado não acompanha pushes
+posteriores, então o commit nunca chegou à `main` e precisei fazer cherry-pick
+num branch novo. Lição: um pull request é uma fotografia no tempo; confira como
+a `main` está antes e depois de apertar o botão.
+
+## Custo consciente por design
+
+Projeto de custo zero de nuvem: tudo local ou no GitHub Actions (gratuito
+para repositórios públicos). Imagem pinada em `nginx:1.31-alpine` (~8 MB
+contra ~190 MB da padrão). Para controles de custo em nuvem real (tagging,
+budget alert, estimativas), veja o
+[aws-highly-available-webapp-terraform](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform).
+
+## Screenshots — o lab em ação
+
+O ciclo completo de resiliência, capturado ao vivo durante os exercícios do lab:
+
+**1. Linha de base saudável — primeiro tráfego chegando**
+![Dashboard do Grafana saudável, primeiro tráfego](./screenshots/Grafana1_up.png)
+
+**2. Teste de carga — o gerador leva as requisições a ~100 req/s**
+![Pico de carga no painel de requisições por segundo](./screenshots/Grafana2_irregular.png)
+
+**3. Falha injetada — container parado: status DOWN, o tráfego zera e o alerta `NginxDown` dispara no Prometheus**
+![Status DOWN com tráfego em zero](./screenshots/Grafana3_down.png)
+
+**4. Recuperação — container reiniciado; repare que a janela de indisponibilidade continua visível no histórico do painel de status**
+![Recuperado, janela de indisponibilidade visível](./screenshots/Grafana4_upAgain.png)
+
+### Pipeline CI/CD (GitHub Actions)
+![Pipeline CI/CD](./screenshots/ci-cd-pipeline.png)
+
+### Visão geral do repositório
+![Repositório](./screenshots/repo-overview.png)
+
+### Aplicação rodando (Docker)
+![Aplicação rodando](./screenshots/app-running.png)
 
 ---
+
+## English
+
+🇧🇷 [Versão em português ↑](#cloud-monitoring-devops-lab)
+
+> **Portfolio focus:** a **Reliability Engineering** case study — detect
+> failure, alert, and self-heal — with a set of documented, real-world
+> troubleshooting write-ups.
+> → [Reliability Engineering: Troubleshooting Case Studies](#reliability-engineering-troubleshooting-case-studies)
 
 ## My reasons
 
@@ -36,19 +231,17 @@ need to be able to see what's happening with it — and that's why I built this 
 
 ## Architecture
 
-```
-Developer ──push──▶ GitHub ──▶ GitHub Actions
-                               ├─ build image
-                               ├─ smoke test (HTTP 200)
-                               ├─ Trivy vulnerability scan
-                               └─ full-stack test (compose up + health checks)
+When I `push` to GitHub, **GitHub Actions** runs:
+- builds the image
+- smoke test (requires HTTP 200)
+- Trivy vulnerability scan
+- full-stack test (`compose up` + health checks)
 
-docker compose up -d
-   ├── app             nginx:1.31-alpine + HEALTHCHECK      → :8080
-   ├── nginx-exporter  reads nginx /stub_status             (internal)
-   ├── prometheus      scrapes metrics + NginxDown alert    → :9090
-   └── grafana         pre-provisioned NGINX dashboard      → :3000
-```
+Locally, `docker compose up -d` brings up four containers:
+- **app** — nginx:1.31-alpine with a `HEALTHCHECK` (port 8080)
+- **nginx-exporter** — reads nginx's `/stub_status` (internal)
+- **prometheus** — scrapes the metrics and fires the `NginxDown` alert (port 9090)
+- **grafana** — pre-provisioned NGINX dashboard (port 3000)
 
 ## Stack
 
@@ -62,25 +255,22 @@ docker compose up -d
 
 ## How it works — the journey of a metric
 
-```
-you / curl ──▶ nginx (app)            serves the page on :8080 and counts
-                 │                    every request internally
-                 │ /stub_status       raw counters, internal port 8081
-                 ▼                    (never published to the host)
-           nginx-exporter             reads the counters and re-exposes them
-                 │                    in Prometheus format on :9113
-                 ▼   scraped every 15s
-            Prometheus                stores the time series and evaluates
-                 │                    alert rules: NginxDown fires after the
-                 │                    app is unreachable for 30s
-                 ▼   PromQL queries
-             Grafana                  draws the dashboard, refreshing every 5s
-```
+The path a metric takes, from request to graph:
 
-Two extra safety nets run underneath: Docker's `HEALTHCHECK` (the engine
-itself probes nginx and marks the container unhealthy if it stops answering)
-and the `restart: unless-stopped` policy (a crashed container is brought
-back automatically).
+1. **nginx (app)** serves the page on port 8080 and counts every request
+   internally (raw counters at `/stub_status`, internal port 8081, never exposed
+   to the host).
+2. **nginx-exporter** reads those counters and re-exposes them in Prometheus
+   format (port 9113).
+3. **Prometheus** scrapes every 15s, stores the time series, and evaluates the
+   alert rules — `NginxDown` fires after 30s with no response from the app.
+4. **Grafana** queries Prometheus (PromQL) and draws the dashboard, refreshing
+   every 5s.
+
+Two extra safety nets run underneath: Docker's `HEALTHCHECK` (the engine itself
+probes nginx and marks the container unhealthy if it stops answering) and the
+`restart: unless-stopped` policy (a crashed container is brought back
+automatically).
 
 ## Quick start
 
@@ -229,205 +419,3 @@ The full resilience cycle, captured live while running the lab exercises:
 
 ### Application Running (Docker)
 ![App Running](./screenshots/app-running.png)
-
----
----
-
-## Português
-
-[🇺🇸 English ⬆](#cloud-monitoring-devops-lab)
-
-Laboratório prático de observabilidade: uma aplicação containerizada
-monitorada por um stack completo **Prometheus + Grafana**, com pipeline de CI
-que builda, testa e escaneia a imagem — e testa o stack de monitoramento
-inteiro de ponta a ponta a cada mudança. Tudo roda localmente com Docker:
-**custo zero de nuvem**.
-
-## O porquê
-
-Eu não sabia como o monitoramento funcionava e queria entender melhor — como
-configurar e como as peças se encaixam. Era também uma forma de sentir como é o
-dia a dia de DevOps / Analista de Infra: o que precisa ser olhado e o que
-aparece pra resolver. Afinal, depois que você tem uma infraestrutura no ar,
-precisa conseguir enxergar o que está acontecendo com ela — e foi por isso que
-montei este lab.
-
-## Arquitetura
-
-```
-Desenvolvedor ──push──▶ GitHub ──▶ GitHub Actions
-                               ├─ build da imagem
-                               ├─ smoke test (HTTP 200)
-                               ├─ scan de vulnerabilidades (Trivy)
-                               └─ teste do stack completo (compose up + health checks)
-
-docker compose up -d
-   ├── app             nginx:1.31-alpine + HEALTHCHECK      → :8080
-   ├── nginx-exporter  lê o /stub_status do nginx           (interno)
-   ├── prometheus      coleta métricas + alerta NginxDown   → :9090
-   └── grafana         dashboard NGINX pré-provisionado     → :3000
-```
-
-## Stack
-
-| Componente | Papel |
-|---|---|
-| nginx (alpine, pinado) | A aplicação web monitorada, com um `HEALTHCHECK` do Docker |
-| nginx-prometheus-exporter | Traduz os contadores do `/stub_status` do nginx em métricas Prometheus |
-| Prometheus | Coleta métricas a cada 15s; dispara o alerta `NginxDown` se o nginx parar de responder |
-| Grafana | Dashboard (status, requisições/s, conexões ativas) provisionado automaticamente — sem configuração manual |
-| GitHub Actions | CI: build, smoke test, scan com Trivy e teste de ponta a ponta do stack inteiro |
-
-## Como funciona — o caminho de uma métrica
-
-```
-você / curl ──▶ nginx (app)           serve a página em :8080 e conta cada
-                  │                   requisição internamente
-                  │ /stub_status      contadores brutos, porta interna 8081
-                  ▼                   (nunca publicada para o host)
-            nginx-exporter            lê os contadores e os re-expõe no
-                  │                   formato Prometheus em :9113
-                  ▼   coletado a cada 15s
-             Prometheus               armazena as séries temporais e avalia
-                  │                   as regras de alerta: NginxDown dispara
-                  │                   após 30s sem resposta da aplicação
-                  ▼   consultas PromQL
-              Grafana                 desenha o dashboard, atualizando a cada 5s
-```
-
-Duas redes de segurança extras por baixo: o `HEALTHCHECK` do Docker (o
-próprio engine sonda o nginx e marca o container como unhealthy se ele parar
-de responder) e a política `restart: unless-stopped` (container que morre
-volta sozinho).
-
-## Como executar
-
-Requer o [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-
-```bash
-docker compose up -d --build
-```
-
-| URL | O que aparece |
-|---|---|
-| http://localhost:8080 | A aplicação |
-| http://localhost:9090 | Prometheus (veja Status → Targets, e Alerts) |
-| http://localhost:3000 | Grafana — login `admin` / `admin`, dashboard "NGINX Overview" já carregado |
-
-Para derrubar tudo: `docker compose down`.
-
-### Notas de acesso (VMs e Docker antigo)
-
-- **Docker antigo sem o plugin compose** (`unknown shorthand flag: 'd'`): use
-  o binário clássico — mesmos comandos com hífen, `docker-compose up -d --build`.
-- **`permission denied ... docker.sock`**: seu usuário não está no grupo
-  `docker`. Use `sudo` na frente dos comandos, ou resolva de vez com
-  `sudo usermod -aG docker $USER` e faça logout/login.
-- **Rodando numa VM VirtualBox (NAT)**: redirecione as portas 8080, 9090 e
-  3000 do host para o guest (Configurações → Rede → Redirecionamento de
-  Portas) e acesse do host em `http://127.0.0.1:3000`. Prefira `127.0.0.1` a
-  `localhost` no Windows: `localhost` resolve primeiro para o IPv6 `::1`, e o
-  NAT do VirtualBox só escuta em IPv4 — então `localhost` recusa enquanto
-  `127.0.0.1` funciona.
-
-## Testando: quebrando de propósito
-
-1. **Gere tráfego** a uma taxa conhecida e veja os gráficos do Grafana
-   reagirem: `python scripts/loadgen.py --rate 20 --duration 60`
-   (instale antes com `pip install -r requirements.txt`). Um loop
-   `while true; do curl; done` também gera carga, mas dispara o mais rápido
-   que a máquina permitir — a taxa é o que o laptop deu naquele dia, o que
-   torna os gráficos não reprodutíveis. O `loadgen.py` recebe `--rate`
-   explícito, sobrevive a falhas de conexão em vez de morrer junto (segue
-   medindo durante o exercício 2) e imprime um resumo de taxa alvo vs. real.
-2. **Derrube a aplicação** (`docker stop monitoring-lab-app`) e veja o alerta
-   `NginxDown` disparar no Prometheus (~30s) e o painel do Grafana ficar
-   vermelho.
-3. **Auto-recuperação** — suba de novo e veja tudo normalizar. A política
-   `restart: unless-stopped` faz aqui o papel que o Auto Scaling Group faz no
-   meu [projeto AWS de alta disponibilidade](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform):
-   detectar falha e restaurar o serviço.
-
-## Pipeline de CI
-
-A cada push/PR: build da imagem → smoke test real (exige HTTP 200) → scan de
-vulnerabilidades com Trivy → teste de ponta a ponta do stack completo
-(aplicação responde, Prometheus coletando `nginx_up == 1`, Grafana saudável).
-
-## Engenharia de Confiabilidade: Casos de Troubleshooting
-
-Relatos detalhados de problemas reais enfrentados ao construir e rodar este
-lab — cada um termina com a causa raiz e a lição, no estilo de um postmortem de
-incidente.
-
-**O SSH recusava a conexão — mesmo com a porta parecendo aberta.** Eu tentava
-conectar na VM do VirtualBox por SSH (porta 2222 do host redirecionada para a 22
-dentro da VM). Um teste rápido de porta dizia que a 2222 estava aberta, e eu
-fiquei confusa: se a porta está aberta, por que o SSH insiste em
-`Connection refused`? O que aprendi: no NAT do VirtualBox, o host responde à
-porta redirecionada mesmo quando nada dentro da VM está escutando — então "a
-porta está aberta" não significava nada. Dentro da VM, o `systemctl is-active
-ssh` mostrou o serviço `inactive`: o SSH estava instalado, mas nunca tinha sido
-iniciado. O `sudo systemctl enable --now ssh` subiu ele (e deixou iniciar no
-boot), e conectei de primeira. O que ficou: `Connection refused` quer dizer que
-a máquina é alcançável, mas nada está escutando naquela porta — e um teste de
-porta por fora de um NAT pode te enganar.
-
-**Meu CI reprovou o mesmo pull request duas vezes — por motivos diferentes.** O
-primeiro erro foi `Unable to resolve action aquasecurity/trivy-action@0.24.0`.
-Descobri que o GitHub acha os actions pela tag do git, e as desse aqui começam
-com `v` (`v0.36.0`, `v0.35.0`...), então `@0.24.0` apontava para algo que
-simplesmente não existia. Em vez de chutar outro número, olhei as tags reais do
-action e fixei `@v0.36.0`. A segunda falha veio logo depois do merge — e dessa
-vez o Trivy ficou vermelho fazendo exatamente o trabalho dele: a imagem base
-estava fixada em `nginx:1.27-alpine` de um ano antes e tinha acumulado
-vulnerabilidades CRITICAL/HIGH que já tinham correção. Aprendi que o certo não é
-silenciar um gate de segurança — atualizei a imagem para a `nginx:1.31-alpine`
-mais nova e o pipeline ficou verde. O que ficou: fixar uma versão mantém tudo
-reproduzível, mas as versões envelhecem — o scanner no CI é quem avisa a hora de
-atualizar.
-
-**Timing de git: conflitos de merge e um commit órfão.** Eu estava com dois
-branches meus abertos ao mesmo tempo, os dois mexendo nos mesmos três arquivos.
-Quando mergeei o primeiro PR, o segundo passou a acusar conflitos no Dockerfile,
-no workflow e no README — a `main` tinha mudado por baixo dele. Como o segundo
-branch era um superconjunto das mudanças do primeiro, a solução foi mergear a
-`main` para dentro dele mantendo a versão do branch em cada arquivo. Depois o
-inverso me pegou: enviei um commit de screenshots a um branch *minutos depois*
-de o PR dele já ter sido mergeado — um PR mergeado não acompanha pushes
-posteriores, então o commit nunca chegou à `main` e precisei fazer cherry-pick
-num branch novo. Lição: um pull request é uma fotografia no tempo; confira como
-a `main` está antes e depois de apertar o botão.
-
-## Custo consciente por design
-
-Projeto de custo zero de nuvem: tudo local ou no GitHub Actions (gratuito
-para repositórios públicos). Imagem pinada em `nginx:1.31-alpine` (~8 MB
-contra ~190 MB da padrão). Para controles de custo em nuvem real (tagging,
-budget alert, estimativas), veja o
-[aws-highly-available-webapp-terraform](https://github.com/rcarra-arq/aws-highly-available-webapp-terraform).
-
-## Screenshots — o lab em ação
-
-O ciclo completo de resiliência, capturado ao vivo durante os exercícios do lab:
-
-**1. Linha de base saudável — primeiro tráfego chegando**
-![Dashboard do Grafana saudável, primeiro tráfego](./screenshots/Grafana1_up.png)
-
-**2. Teste de carga — o gerador leva as requisições a ~100 req/s**
-![Pico de carga no painel de requisições por segundo](./screenshots/Grafana2_irregular.png)
-
-**3. Falha injetada — container parado: status DOWN, o tráfego zera e o alerta `NginxDown` dispara no Prometheus**
-![Status DOWN com tráfego em zero](./screenshots/Grafana3_down.png)
-
-**4. Recuperação — container reiniciado; repare que a janela de indisponibilidade continua visível no histórico do painel de status**
-![Recuperado, janela de indisponibilidade visível](./screenshots/Grafana4_upAgain.png)
-
-### Pipeline CI/CD (GitHub Actions)
-![Pipeline CI/CD](./screenshots/ci-cd-pipeline.png)
-
-### Visão geral do repositório
-![Repositório](./screenshots/repo-overview.png)
-
-### Aplicação rodando (Docker)
-![Aplicação rodando](./screenshots/app-running.png)
